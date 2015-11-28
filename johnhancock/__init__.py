@@ -73,3 +73,37 @@ class CanonicalRequest(object):
         return ';'.join(sorted(
             x.lower() for x in self.headers.keys()
         ))
+
+
+class CredentialScope(object):
+    """
+    The credential scope, generated from the region and service.
+
+    :param region:  The region the request is querying.  See
+        `Regions and Endpoints`_ for a list of values.
+    :type region:  str
+    :param service:  The service the request is querying.
+    :type service:  str
+
+    .. _`Regions and Endpoints`:
+        http://docs.aws.amazon.com/general/latest/gr/rande.html
+
+    """
+    def __init__(self, region, service):
+        self.region = region
+        self.service = service
+
+    def calculate(self, date):
+        """
+        Calculate the credential scope for the given date.
+
+        :param date:  The date for the credential scope.
+        :type date:  :class:`datetime.date` or :class:`datetime.datetime`
+
+        """
+        return '/'.join([
+            date.strftime('%Y%m%d'),
+            self.region,
+            self.service,
+            'aws4_request',
+        ])
