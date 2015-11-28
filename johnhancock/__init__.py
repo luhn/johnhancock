@@ -1,5 +1,6 @@
 import re
 import hashlib
+import hmac
 from collections import namedtuple
 
 
@@ -131,3 +132,25 @@ class DatedCredentialScope(
             self.service,
             'aws4_request',
         ])
+
+
+def generate_signing_key(secret, scope):
+    """
+    Generate a signing key from the secret and the credential scope.
+
+    :param secret:  The AWS key secret.
+    :type secret:  str
+    :param scope:  The credential scope with date.
+    :type scope:  :class:`DatedCredentialScope`
+
+    :returns:  The signing key.
+    :rtype:  bytes
+
+    """
+    def sign(key, value):
+        return hmac.new(key, value.encode('ascii'), hashlib.sha256).digest()
+    date = scope.date.strftime('%Y%m%d')
+    signed_date = sign(b'AWS4' + secret.encode('ascii'), date)
+    signed_region = sign(signed_date, scope.region)
+    signed_service = sign(signed_region, scope.service)
+    return sign(signed_service, 'aws4_request')
