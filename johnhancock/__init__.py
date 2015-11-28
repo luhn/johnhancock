@@ -1,5 +1,6 @@
 import re
 import hashlib
+from collections import namedtuple
 
 
 class CanonicalRequest(object):
@@ -75,7 +76,34 @@ class CanonicalRequest(object):
         ))
 
 
-class CredentialScope(object):
+class CredentialScope(
+        namedtuple('CredentialScope', ['region', 'service'])
+):
+    """
+    The credential scope, sans date.
+
+    :param region:  The region the request is querying.  See
+        `Regions and Endpoints`_ for a list of values.
+    :type region:  str
+    :param service:  The service the request is querying.
+    :type service:  str
+
+    """
+    def date(self, date):
+        """
+        Generate a :class:`DatedCredentialScope` from this objec.t
+
+        """
+        return DatedCredentialScope(
+            self.region,
+            self.service,
+            date,
+        )
+
+
+class DatedCredentialScope(
+        namedtuple('DatedCredentialScope', ['region', 'service', 'date'])
+):
     """
     The credential scope, generated from the region and service.
 
@@ -84,25 +112,21 @@ class CredentialScope(object):
     :type region:  str
     :param service:  The service the request is querying.
     :type service:  str
+    :param date:  The date for the credential scope.
+    :type date:  :class:`datetime.date` or :class:`datetime.datetime`
 
     .. _`Regions and Endpoints`:
         http://docs.aws.amazon.com/general/latest/gr/rande.html
 
     """
-    def __init__(self, region, service):
-        self.region = region
-        self.service = service
-
-    def calculate(self, date):
+    def __str__(self):
         """
         Calculate the credential scope for the given date.
 
-        :param date:  The date for the credential scope.
-        :type date:  :class:`datetime.date` or :class:`datetime.datetime`
 
         """
         return '/'.join([
-            date.strftime('%Y%m%d'),
+            self.date.strftime('%Y%m%d'),
             self.region,
             self.service,
             'aws4_request',
