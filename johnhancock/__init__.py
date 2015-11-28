@@ -168,3 +168,23 @@ class SigningKey(object):
 
         """
         return binascii.hexlify(self._sign(self.key, string)).decode('ascii')
+
+
+def generate_string_to_sign(date, scope, request):
+    """
+    Generate a string which should be signed by the signing key.
+
+    :param date:  The datetime of the request.
+    :type date:  :class:`datetime.datetime`
+    :param scope:  The credential scope.
+    :type scope:  :class:`CredentialScope` or :class:`DatedCredentialScope`
+    :param request:  The request to sign.
+    :type request:  :class:`CanonicalRequest`
+
+    """
+    return '\n'.join([
+        'AWS4-HMAC-SHA256',
+        date.strftime('%Y%m%dT%H:%M:%SZ'),
+        date.strftime('%Y%m%d') + '/' + str(scope),
+        request.hashed,
+    ])

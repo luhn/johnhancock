@@ -1,6 +1,9 @@
-from datetime import date as Date
+from datetime import datetime as DateTime, date as Date
 
-from johnhancock import SigningKey, DatedCredentialScope
+from johnhancock import (
+    SigningKey, CanonicalRequest, CredentialScope, DatedCredentialScope,
+    generate_string_to_sign,
+)
 
 
 def test_signing_key():
@@ -39,3 +42,22 @@ def test_signing_key_sign():
         signing_key.sign(string) ==
         '5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7'
     )
+
+
+def test_string_to_sign():
+    date = DateTime(2015, 8, 30, 12, 36)
+    scope = CredentialScope(
+        'us-east-1',
+        'iam',
+    )
+    request = CanonicalRequest(
+        'GET',
+        '/',
+        'Action=ListUsers&Version=2010-05-08',
+        {
+            'Host': 'iam.amazonaws.com',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+            'X-Amz-Date': '20150830T123600Z',
+        },
+    )
+    generate_string_to_sign(date, scope, request)
