@@ -1,6 +1,7 @@
 import re
 import hashlib
 import hmac
+import binascii
 from collections import namedtuple
 
 
@@ -134,23 +135,36 @@ class DatedCredentialScope(
         ])
 
 
-def generate_signing_key(secret, scope):
+class SigningKey(object):
     """
-    Generate a signing key from the secret and the credential scope.
+    A signing key from the secret and the credential scope.
 
     :param secret:  The AWS key secret.
     :type secret:  str
     :param scope:  The credential scope with date.
     :type scope:  :class:`DatedCredentialScope`
 
-    :returns:  The signing key.
-    :rtype:  bytes
-
     """
-    def sign(key, value):
-        return hmac.new(key, value.encode('ascii'), hashlib.sha256).digest()
-    date = scope.date.strftime('%Y%m%d')
-    signed_date = sign(b'AWS4' + secret.encode('ascii'), date)
-    signed_region = sign(signed_date, scope.region)
-    signed_service = sign(signed_region, scope.service)
-    return sign(signed_service, 'aws4_request')
+    #: The computed signing key as a bytes object
+    key = None
+
+    def __init__(self, secret, scope):
+        date = scope.date.strftime('%Y%m%d')
+        signed_date = self._sign(b'AWS4' + secret.encode('ascii'), date)
+        signed_region = self._sign(signed_date, scope.region)
+        signed_service = self._sign(signed_region, scope.service)
+        self.key = self._sign(signed_service, 'aws4_request')
+
+    def _sign(self, key, value):
+        return hmac.new(
+            key,
+            value.encode('ascii'),
+            hashlib.sha256,
+        ).digest()
+
+    def sign(self, string):
+        """
+        Sign a string.  Returns the hexidecimal digest.
+
+        """
+        return binascii.hexlify(self._sign(self.key, string)).decode('ascii')
