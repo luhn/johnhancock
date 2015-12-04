@@ -2,6 +2,7 @@ import re
 import hashlib
 import hmac
 import binascii
+from datetime import datetime as DateTime
 from collections import namedtuple
 
 
@@ -11,9 +12,11 @@ class CanonicalRequest(object):
 
     :param method:  The HTTP method being used.
     :type method:  str
-    :param uri:  The URL path, no host or query string.
+    :param url:  The full URL, including protocol, host, and optionally the
+        query string.
     :type uri:  str
-    :param query_string:  The URL-encoded query string.
+    :param query_string:  The URL-encoded query string.  Can be omitted if no
+        query string or included in the URL.
     :type query_string:  str
     :param headers:  A dictionary of headers.
     :type headers:  dict
@@ -24,8 +27,8 @@ class CanonicalRequest(object):
     def __init__(
             self,
             method,
-            uri='/',
-            query_string='',
+            uri,
+            query_string=None,
             headers={},
             payload=b'',
     ):
@@ -72,10 +75,72 @@ class CanonicalRequest(object):
         return '\n'.join(lines) + '\n'
 
     @property
-    def signed_headers(self):
-        return ';'.join(sorted(
+    def header_list(self):
+        """
+        A lowercase list of headers.
+
+        """
+        return [
             x.lower() for x in self.headers.keys()
-        ))
+        ]
+
+    @property
+    def signed_headers(self):
+        return ';'.join(sorted(self.header_list))
+
+    def _set_date_header(self):
+        """
+        Set the ``X-Amz-Date`` header to the current datetime, if not set.
+
+        :returns:  The datetime from the ``X-Amx-Date`` header.
+        :rtype:  :class:`datetime.datetime`
+
+        """
+        pass
+
+    def _set_date_param(self):
+        """
+        Set the ``X-Amz-Date`` query parameter to the current datetime, if not
+        set.
+
+        :returns:  The datetime from the ``X-Amx-Date`` parameter.
+        :rtype:  :class:`datetime.datetime`
+
+        """
+        pass
+
+    def sign_via_headers(self, credentials):
+        """
+        Create a :clas:`SignedRequest` by adding the appropriate headers.
+
+        :param credentials:  The credentials with which to sign the request.
+        :type credentials: :class:`Credentials`
+
+        :returns:  The signed request.
+        :rtype:  :class:`SignedRequest`
+
+        """
+        pass
+
+    def sign_via_query_string(self, param):
+        """
+        Create a :clas:`SignedRequest` by adding the appropriate query
+        parameters.
+
+        :param credentials:  The credentials with which to sign the request.
+        :type credentials: :class:`Client`
+
+        :returns:  The signed request.
+        :rtype:  :class:`SignedRequest`
+
+        """
+        pass
+
+
+#: A signed request.  Does not include the request body.
+SignedRequest = namedtuple('SignedRequest', [
+    'method', 'uri', 'headers',
+])
 
 
 class CredentialScope(
@@ -188,3 +253,35 @@ def generate_string_to_sign(date, scope, request):
         date.strftime('%Y%m%d') + '/' + str(scope),
         request.hashed,
     ])
+
+
+def generate_authorization_header(key, date, scope, request):
+    """
+    Generate an appropriate value for the authorization header.
+
+    """
+    return 'AWS4-HMAC-SHA256 '
+    return ' '.join([
+        'Credential=' + key.date.strftime('%Y%m%d') + '/' + str(scope),
+
+    ])
+
+
+class Credentials(object):
+    """
+    An object that encapsulates all the necessary credentials to sign a
+    request.
+
+    """
+    def __init__(self, key_id, key_secret, region, service):
+        self._key_secret = key_secret
+        self._scope = CredentialScope(region, service)
+
+    def scope(self, datetime):
+        return self._scope.date(datetime)
+
+    def signing_key(self, datetime):
+        return SigningKey(self._key_secret, self.scope(datetime))
+
+    def _auth_header(self, request):
+        pass
