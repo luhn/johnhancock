@@ -68,7 +68,7 @@ class CanonicalRequest(object):
         elif isinstance(query, str):
             self.query = parse_qsl(query)
         else:
-            self.query = query
+            self.query = query or []
         self.headers = Headers(headers or {})
         self.payload = payload
         if self._parts[1] and 'host' not in self.headers:
@@ -125,7 +125,7 @@ class CanonicalRequest(object):
         """
         Set the ``X-Amz-Date`` header to the current datetime, if not set.
 
-        :returns:  The datetime from the ``X-Amx-Date`` header.
+        :returns:  The datetime from the ``X-Amz-Date`` header.
         :rtype:  :class:`datetime.datetime`
 
         """
@@ -139,11 +139,14 @@ class CanonicalRequest(object):
         Set the ``X-Amz-Date`` query parameter to the current datetime, if not
         set.
 
-        :returns:  The datetime from the ``X-Amx-Date`` parameter.
+        :returns:  The datetime from the ``X-Amz-Date`` parameter.
         :rtype:  :class:`datetime.datetime`
 
         """
-        pass
+        if not any(key == 'X-Amz-Date' for (key, _) in self.query):
+            self.query.append(
+                ('X-Amz-Date', self._datetime().strftime('%Y%m%dT%H%M%SZ'))
+            )
 
     def sign_via_headers(self, credentials):
         """
