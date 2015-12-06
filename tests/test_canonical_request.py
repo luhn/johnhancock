@@ -1,7 +1,8 @@
 import pytest
 import textwrap
+from datetime import datetime as DateTime
 
-from johnhancock import CanonicalRequest
+from johnhancock import CanonicalRequest, Headers
 
 
 def test_canon_request_basics():
@@ -17,10 +18,10 @@ def test_canon_request_basics():
     assert canon_request.method == 'GET'
     assert canon_request.uri == '/'
     assert canon_request.query_string == 'Action=ListUsers&Version=2010-05-08'
-    assert canon_request.headers == {
+    assert canon_request.headers == Headers({
         'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
         'X-Amz-Date': '20150830T123600Z',
-    }
+    })
 
 
 def test_canon_request_payload():
@@ -49,7 +50,41 @@ def test_canon_request_payload():
         canon_request.payload = u''
 
 
+def test_headers_object():
+    h = Headers({
+        'Foo': 'Bar',
+        'fizz': 'buzz',
+    })
+    h['Baz'] = 'Fuzz'
+    assert h['bAz'] == 'Fuzz'
+    assert len(h) == 3
+    assert {k for k in h} == set(h.keys()) == {'foo', 'baz', 'fizz'}
+    del h['fIzz']
+    assert set(h.keys()) == {'foo', 'baz'}
+
+
 def test_canon_request_headers():
+    canon_request = CanonicalRequest(
+        'GET',
+        '/',
+        headers={
+            'Host': 'iam.amazonaws.com',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+            'X-Amz-Date': '20150830T123600Z',
+            'My-header1': '   a   b   c ',
+            'My-Header2': '"a   b   c"',
+        },
+    )
+    # Case insensitive keys
+    assert canon_request.headers['x-aMZ-daTe'] == '20150830T123600Z'
+    assert set(canon_request.headers.keys()) == {
+        'content-type', 'host', 'my-header1', 'my-header2', 'x-amz-date',
+    }
+    canon_request.headers['Testing'] = 'foo'
+    assert canon_request.headers['tEsting'] == 'foo'
+
+
+def test_canon_request_canon_headers():
     canon_request = CanonicalRequest(
         'GET',
         '/',
@@ -112,3 +147,33 @@ def test_canon_request_hashed():
         canon_request.hashed ==
         'f536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59'
     )
+
+
+def test_canon_request_set_date_header():
+    canon_request = CanonicalRequest(
+        'GET',
+        '/',
+        'Action=ListUsers&Version=2010-05-08',
+        {
+            'Host': 'iam.amazonaws.com',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+        },
+    )
+    canon_request._datetime = lambda: DateTime(2015, 8, 30, 12, 37)
+    canon_request._set_date_header()
+    assert canon_request.headers['x-amz-date'] == '20150830T123700Z'
+
+
+def test_canon_request_set_date_header_already_exists():
+    canon_request = CanonicalRequest(
+        'GET',
+        '/',
+        'Action=ListUsers&Version=2010-05-08',
+        {
+            'Host': 'iam.amazonaws.com',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+            'X-Amz-Date': '20150830T123600Z',
+        },
+    )
+    canon_request._set_date_header()
+    assert canon_request.headers['X-Amz-Date'] == '20150830T123600Z'

@@ -4,6 +4,34 @@ import hmac
 import binascii
 from datetime import datetime as DateTime
 from collections import namedtuple
+from collections.abc import MutableMapping
+
+
+class Headers(MutableMapping):
+    """
+    A case-insensitive dictionary-like object, for use in storing the headers.
+
+    """
+    def __init__(self, init):
+        self._map = {}
+        for key, value in init.items():
+            self[key] = value
+
+    def __getitem__(self, key):
+        return self._map[key.lower()]
+
+    def __setitem__(self, key, value):
+        self._map[key.lower()] = value
+
+    def __delitem__(self, key):
+        del self._map[key.lower()]
+
+    def __iter__(self):
+        for key in self._map:
+            yield key.lower()
+
+    def __len__(self):
+        return len(self._map)
 
 
 class CanonicalRequest(object):
@@ -35,7 +63,7 @@ class CanonicalRequest(object):
         self.method = method
         self.uri = uri
         self.query_string = query_string
-        self.headers = headers
+        self.headers = Headers(headers)
         self.payload = payload
 
     def __str__(self):
@@ -75,18 +103,15 @@ class CanonicalRequest(object):
         return '\n'.join(lines) + '\n'
 
     @property
-    def header_list(self):
-        """
-        A lowercase list of headers.
-
-        """
-        return [
-            x.lower() for x in self.headers.keys()
-        ]
-
-    @property
     def signed_headers(self):
-        return ';'.join(sorted(self.header_list))
+        return ';'.join(sorted(self.headers.keys()))
+
+    def _datetime(self):
+        """
+        Return the current UTC datetime.
+
+        """
+        return DateTime.utcnow()
 
     def _set_date_header(self):
         """
@@ -96,7 +121,10 @@ class CanonicalRequest(object):
         :rtype:  :class:`datetime.datetime`
 
         """
-        pass
+        if 'x-amz-date' not in self.headers:
+            self.headers['x-amz-date'] = (
+                self._datetime().strftime('%Y%m%dT%H%M%SZ')
+            )
 
     def _set_date_param(self):
         """
