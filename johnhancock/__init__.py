@@ -3,8 +3,9 @@ import hashlib
 import hmac
 import binascii
 from datetime import datetime as DateTime
+from urllib.parse import urlsplit, parse_qsl, urlencode
 from collections import namedtuple
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Mapping
 
 
 class Headers(MutableMapping):
@@ -43,9 +44,9 @@ class CanonicalRequest(object):
     :param url:  The full URL, including protocol, host, and optionally the
         query string.
     :type uri:  str
-    :param query_string:  The URL-encoded query string.  Can be omitted if no
-        query string or included in the URL.
-    :type query_string:  str
+    :param query:  The request query as a dictionary or a string.  Can be
+        omitted if no query string or included in the URL.
+    :type query:  str or dict or list of two-tuples
     :param headers:  A dictionary of headers.
     :type headers:  dict
     :param payload:  The request body.
@@ -56,21 +57,28 @@ class CanonicalRequest(object):
             self,
             method,
             uri,
-            query_string=None,
-            headers={},
+            query=None,
+            headers=None,
             payload=b'',
     ):
         self.method = method
-        self.uri = uri
-        self.query_string = query_string
-        self.headers = Headers(headers)
+        self._parts = urlsplit(uri)
+        if isinstance(query, Mapping):
+            self.query = list(query.items())
+        elif isinstance(query, str):
+            self.query = parse_qsl(query)
+        else:
+            self.query = query
+        self.headers = Headers(headers or {})
         self.payload = payload
+        if self._parts[1] and 'host' not in self.headers:
+            self.headers['host'] = self._parts[1]
 
     def __str__(self):
         return '\n'.join([
             self.method,
-            self.uri,
-            self.query_string,
+            self._parts[2],
+            urlencode(self.query),
             self.canonical_headers,
             self.signed_headers,
             self.hashed_payload,

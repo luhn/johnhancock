@@ -5,23 +5,78 @@ from datetime import datetime as DateTime
 from johnhancock import CanonicalRequest, Headers
 
 
-def test_canon_request_basics():
+def test_canon_request_init():
     canon_request = CanonicalRequest(
         'GET',
-        '/',
-        'Action=ListUsers&Version=2010-05-08',
+        'https://aws.amazon.com/foo',
+        [
+            ('Action', 'ListUsers'),
+            ('Version', '2010-05-08'),
+        ],
         {
+            'Host': 'example.com',
             'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
             'X-Amz-Date': '20150830T123600Z',
         },
     )
     assert canon_request.method == 'GET'
-    assert canon_request.uri == '/'
-    assert canon_request.query_string == 'Action=ListUsers&Version=2010-05-08'
+    assert canon_request._parts == (
+        'https',
+        'aws.amazon.com',
+        '/foo',
+        '',
+        '',
+    )
+    assert canon_request.query == [
+        ('Action', 'ListUsers'),
+        ('Version', '2010-05-08'),
+    ]
     assert canon_request.headers == Headers({
+        'Host': 'example.com',
         'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
         'X-Amz-Date': '20150830T123600Z',
     })
+
+
+def test_canon_request_init_implicit_host():
+    canon_request = CanonicalRequest(
+        'GET',
+        'https://aws.amazon.com/foo',
+        headers={
+            'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+            'X-Amz-Date': '20150830T123600Z',
+        },
+    )
+    assert canon_request.headers == Headers({
+        'Host': 'aws.amazon.com',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+        'X-Amz-Date': '20150830T123600Z',
+    })
+
+
+def test_canon_request_init_query_types():
+    canon_request = CanonicalRequest(
+        'GET',
+        'https://aws.amazon.com/foo',
+        {
+            'Action': 'ListUsers',
+            'Version': '2010-05-08',
+        },
+    )
+    assert set(canon_request.query) == {
+        ('Action', 'ListUsers'),
+        ('Version', '2010-05-08'),
+    }
+
+    canon_request = CanonicalRequest(
+        'GET',
+        'https://aws.amazon.com/foo',
+        'Action=ListUsers&Version=2010-05-08',
+    )
+    assert canon_request.query == [
+        ('Action', 'ListUsers'),
+        ('Version', '2010-05-08'),
+    ]
 
 
 def test_canon_request_payload():
