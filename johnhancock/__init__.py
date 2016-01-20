@@ -121,7 +121,24 @@ class CanonicalRequest(object):
         """
         return DateTime.utcnow()
 
-    def _set_date_header(self):
+    @property
+    def datetime(self):
+        """
+        Extract the datetime from the request
+
+        """
+        if 'x-amz-date' in self.headers:
+            datetime = self.headers['x-amz-date']
+        elif any(key == 'X-Amz-Date' for (key, _) in self.query):
+            datetime = dict(self.query)['X-Amz-Date']
+        else:
+            raise ValueError('No datetime is set in the request.')
+        return DateTime.strptime(
+            datetime,
+            '%Y%m%dT%H%M%SZ',
+        )
+
+    def set_date_header(self):
         """
         Set the ``X-Amz-Date`` header to the current datetime, if not set.
 
@@ -130,11 +147,13 @@ class CanonicalRequest(object):
 
         """
         if 'x-amz-date' not in self.headers:
-            self.headers['x-amz-date'] = (
-                self._datetime().strftime('%Y%m%dT%H%M%SZ')
-            )
+            datetime = self._datetime().strftime('%Y%m%dT%H%M%SZ')
+            self.headers['x-amz-date'] = datetime
+            return datetime
+        else:
+            return None
 
-    def _set_date_param(self):
+    def set_date_param(self):
         """
         Set the ``X-Amz-Date`` query parameter to the current datetime, if not
         set.
@@ -144,36 +163,13 @@ class CanonicalRequest(object):
 
         """
         if not any(key == 'X-Amz-Date' for (key, _) in self.query):
+            datetime = self._datetime().strftime('%Y%m%dT%H%M%SZ')
             self.query.append(
-                ('X-Amz-Date', self._datetime().strftime('%Y%m%dT%H%M%SZ'))
+                ('X-Amz-Date', datetime)
             )
-
-    def sign_via_headers(self, credentials):
-        """
-        Create a :clas:`SignedRequest` by adding the appropriate headers.
-
-        :param credentials:  The credentials with which to sign the request.
-        :type credentials: :class:`Credentials`
-
-        :returns:  The signed request.
-        :rtype:  :class:`SignedRequest`
-
-        """
-        pass
-
-    def sign_via_query_string(self, param):
-        """
-        Create a :clas:`SignedRequest` by adding the appropriate query
-        parameters.
-
-        :param credentials:  The credentials with which to sign the request.
-        :type credentials: :class:`Client`
-
-        :returns:  The signed request.
-        :rtype:  :class:`SignedRequest`
-
-        """
-        pass
+            return datetime
+        else:
+            return None
 
 
 #: A signed request.  Does not include the request body.
@@ -286,23 +282,13 @@ def generate_string_to_sign(date, scope, request):
     :type request:  :class:`CanonicalRequest`
 
     """
+    if isinstance(scope, CredentialScope):
+        scope = scope.date(date)
     return '\n'.join([
         'AWS4-HMAC-SHA256',
-        date.strftime('%Y%m%dT%H:%M:%SZ'),
-        date.strftime('%Y%m%d') + '/' + str(scope),
+        date.strftime('%Y%m%dT%H%M%SZ'),
+        str(scope),
         request.hashed,
-    ])
-
-
-def generate_authorization_header(key, date, scope, request):
-    """
-    Generate an appropriate value for the authorization header.
-
-    """
-    return 'AWS4-HMAC-SHA256 '
-    return ' '.join([
-        'Credential=' + key.date.strftime('%Y%m%d') + '/' + str(scope),
-
     ])
 
 
@@ -313,6 +299,7 @@ class Credentials(object):
 
     """
     def __init__(self, key_id, key_secret, region, service):
+        self._key_id = key_id
         self._key_secret = key_secret
         self._scope = CredentialScope(region, service)
 
@@ -322,5 +309,62 @@ class Credentials(object):
     def signing_key(self, datetime):
         return SigningKey(self._key_secret, self.scope(datetime))
 
-    def _auth_header(self, request):
-        pass
+    def sign_via_headers(self, request):
+        """
+        Generate the appropriate headers to sign the request
+
+        :param request:  The request to sign.
+        :type request:  :class:`CanonicalRequest`
+
+        :returns:  A list of additional headers.
+        :rtype:  list of two-tuples
+
+        """
+        headers = []
+        datetime_str = request.set_date_header()
+        if datetime_str is not None:
+            headers.append(('X-Amz-Date', datetime_str))
+        datetime = request.datetime
+        scope = self.scope(datetime)
+        key = self.signing_key(datetime)
+        to_sign = generate_string_to_sign(datetime, scope, request)
+        auth = 'AWS4-HMAC-SHA256 ' + ', '.join([
+            'Credential={}/{}'.format(self._key_id, str(scope)),
+            'SignedHeaders={}'.format(request.signed_headers),
+            'Signature={}'.format(key.sign(to_sign)),
+        ])
+        headers.append(('Authorization', auth))
+        return headers
+
+    def sign_via_query_string(self, request, expires=60):
+        """
+        Create a :clas:`SignedRequest` from the given request by adding the
+        appropriate query parameters.
+
+        :param credentials:  The credentials with which to sign the request.
+        :type credentials: :class:`Client`
+
+        :returns:  The signed request.
+        :rtype:  :class:`SignedRequest`
+
+        """
+        params = []
+        datetime_str = request.set_date_param()
+        if datetime_str is not None:
+            params.append(('X-Amz-Date', datetime_str))
+        datetime = request.datetime
+        scope = self.scope(datetime)
+        key = self.signing_key(datetime)
+        to_append = [
+            ('X-Amz-Algorithm', 'AWS4-HMAC-SHA256'),
+            ('X-Amz-Credential', '{}/{}'.format(self._key_id, str(scope))),
+            ('X-Amz-Expires', str(expires)),
+            ('X-Amz-SignedHeaders', request.signed_headers),
+        ]
+        request.query = request.query[:-1] + to_append[:2] + request.query[-1:] + to_append[2:]
+        params = to_append[:2] + params + to_append[2:]
+        to_sign = generate_string_to_sign(datetime, scope, request)
+        params.append(
+            ('X-Amz-Signature', key.sign(to_sign))
+        )
+        return params

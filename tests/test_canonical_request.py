@@ -215,7 +215,7 @@ def test_canon_request_set_date_header():
         },
     )
     canon_request._datetime = lambda: DateTime(2015, 8, 30, 12, 37)
-    canon_request._set_date_header()
+    assert canon_request.set_date_header() == '20150830T123700Z'
     assert canon_request.headers['x-amz-date'] == '20150830T123700Z'
 
 
@@ -230,7 +230,7 @@ def test_canon_request_set_date_header_already_exists():
             'X-Amz-Date': '20150830T123600Z',
         },
     )
-    canon_request._set_date_header()
+    assert canon_request.set_date_header() is None
     assert canon_request.headers['X-Amz-Date'] == '20150830T123600Z'
 
 def test_canon_request_set_date_param():
@@ -240,7 +240,7 @@ def test_canon_request_set_date_param():
         'Action=ListUsers&Version=2010-05-08',
     )
     canon_request._datetime = lambda: DateTime(2015, 8, 30, 12, 37)
-    canon_request._set_date_param()
+    assert canon_request.set_date_param() == '20150830T123700Z'
     assert canon_request.query == [
         ('Action', 'ListUsers'),
         ('Version', '2010-05-08'),
@@ -252,11 +252,32 @@ def test_canon_request_set_date_param_already_exists():
     canon_request = CanonicalRequest(
         'GET',
         '/',
-        'Action=ListUsers&Version=2010-05-08&X-Amz-Date=20150830T123700Z',
+        'Action=ListUsers&Version=2010-05-08&X-Amz-Date=20150830T123600Z',
     )
-    canon_request._set_date_param()
+    assert canon_request.set_date_param() is None
     assert canon_request.query == [
         ('Action', 'ListUsers'),
         ('Version', '2010-05-08'),
-        ('X-Amz-Date', '20150830T123700Z'),
+        ('X-Amz-Date', '20150830T123600Z'),
     ]
+
+
+def test_canon_request_datetime():
+    canon_request = CanonicalRequest(
+        'GET',
+        '/',
+        'Action=ListUsers&Version=2010-05-08',
+        {
+            'Host': 'iam.amazonaws.com',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+            'X-Amz-Date': '20150830T123600Z',
+        },
+    )
+    assert canon_request.datetime == DateTime(2015, 8, 30, 12, 36)
+
+    canon_request = CanonicalRequest(
+        'GET',
+        '/',
+        'Action=ListUsers&Version=2010-05-08&X-Amz-Date=20150830T123700Z',
+    )
+    assert canon_request.datetime == DateTime(2015, 8, 30, 12, 37)

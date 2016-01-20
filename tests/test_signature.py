@@ -60,4 +60,9 @@ def test_string_to_sign():
             'X-Amz-Date': '20150830T123600Z',
         },
     )
-    generate_string_to_sign(date, scope, request)
+    assert generate_string_to_sign(date, scope, request) == (
+        'AWS4-HMAC-SHA256\n'
+        + '20150830T123600Z\n'
+        + '20150830/us-east-1/iam/aws4_request\n'
+        + 'f536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59'
+    )
