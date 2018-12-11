@@ -1,2 +1,3 @@
 # johnhancock
-A simple library for signing AWS requests.
+
+This project is not maintained.  Please use [aws-requests-auth](https://github.com/davidmuller/aws-requests-auth) instead.
